@@ -130,7 +130,11 @@ Target "SetupPython" (fun _ ->
     python_ "setup.py bdist_wheel"
     //python_ "-m pip install --no-cache-dir --force-reinstall --ignore-installed dist\pythonnet-2.1.0-cp34-cp34m-win32.whl"
     python_ "-m pip install --no-cache-dir --force-reinstall --ignore-installed dist\pythonnet-2.1.0-cp35-cp35m-win_amd64.whl"
-    python_ @"src\tests\runtests.py"
+    
+    let pythonTest = pythonPW (Path.GetFullPath("temp"@@"pythonnet"@@"testdir")) ("temp"@@"pythonnet")
+    
+    CopyDir ("temp"@@"pythonnet"@@"testdir") ("temp"@@"pythonnet"@@"build"@@"lib.win-amd64-3.5") (fun _ -> true)
+    pythonTest @"src\tests\runtests.py"
 )
 
 Target "All" DoNothing
