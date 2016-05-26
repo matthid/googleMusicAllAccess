@@ -1,0 +1,64 @@
+>>> from gmusicapi import Mobileclient
+
+>>> api = Mobileclient()
+
+>>> logged_in = api.login('matthi.d@googlemail.com', 'imtqpqswzdarlgmu', '5811C8A4724F7E22')
+>>> logged_in = api.login('matthi.d@googlemail.com', 'imtqpqswzdarlgmu', '3e76f3110f5a1742')
+
+>>> my_id = 'Teaherncwq37g2ebmoaqzl775d4'
+
+
+>>> api.get_registered_devices()
+[ { "lastAccessedTimeMs": "1463986950040", 
+    "friendlyName": "MadPhone", 
+    "smartPhone": False, 
+    "id": "ios:40AC8255-B201-401A-A6E6-98ED49160315", 
+    "type": "IOS", "kind": "sj#devicemanagementinfo" }, 
+  { "lastAccessedTimeMs": "1463937563681", 
+    "kind": "sj#devicemanagementinfo", 
+    "friendlyName": "Google LGE Nexus 4", 
+    "id": "0x3e76f3110f5a1742", 
+    "type": "ANDROID" }, 
+  { "lastAccessedTimeMs": "1449358303876", 
+    "kind": "sj#devicemanagementinfo", 
+    "friendlyName": "desktop-qc1pjdc", 
+    "id": "392215ce20a61dd1a8d5365771c55a7763e4c0efda30aac32bc346090831d4e2", 
+    "type": "DESKTOP_APP"},
+  { "lastAccessedTimeMs": "1449337645623", 
+    "kind": "sj#devicemanagementinfo", 
+    "smartPhone": False, 
+    "id": "e700e4ba231e59134e2c2e71d8214f2e2076f07772ca2c18dd05b968da2bf1b4", 
+    "type": "DESKTOP_APP"}]
+
+>>> api.get_stream_url(my_id)
+'https://r9---sn-h0j7sn7y.c.doc-0-0-sj.sj.googleusercontent.com/videoplayback?id=e3c4e82cf041923c&itag=25&source=skyjam&begin=0&upn=0F4xO0LYRtk&o=02236938499591249362&ratebypass=yes&ip=91.45.247.189&ipbits=0&expire=1464258636&sparams=expire,id,ip,ipbits,itag,mm,mn,ms,mv,o,pl,ratebypass,source,upn&signature=18E9342C16A890D8BE6D5F8F2CC48BA66396FBD3.2507607FBBA3E34CFB4877A9251A6226EDF1B7A8&key=cms1&mm=31&mn=sn-h0j7sn7y&ms=au&mt=1464258334&mv=m&pl=19'
+
+>>> api.get_track_info(my_id)
+{ "artistId": ["A54dnv5nds4kg62mgyldkizknoa"], 
+  "explicitType": "2", 
+  "kind": "sj#track", 
+  "artist": "Arrows to Athens", 
+  "albumAvailableForPurchase": false, 
+  "albumId": "B5otivfbzryolnvxvqmaktuwl2e", 
+  "title": "Firing Squad", 
+  "composer": "", 
+  "albumArtist": "Arrows to Athens", 
+  "trackAvailableForSubscription": true, 
+  "estimatedSize": "8741643", 
+  "trackType": "7", 
+  "nid": "Teaherncwq37g2ebmoaqzl775d4", 
+  "album": "Exile", 
+  "durationMillis": "218000", 
+  "trackAvailableForPurchase": true, 
+  "albumArtRef": 
+    [ { "kind": "sj#imageRef", 
+        "autogen": false, 
+        "url": "http://lh3.googleusercontent.com/mzfzWVG-g6nG8L12itb3bA8tLk-w0ablXdT6Jo7rV-gLwTI2BGc4lyqFl7YgFVVaROLGRmcI", 
+        "aspectRatio": "1" } ], 
+  "trackNumber": 1, 
+  "year": 2016, 
+  "genre": "Alternative/Indie", 
+  "storeId": "Teaherncwq37g2ebmoaqzl775d4", 
+  "discNumber": 1 }
+
+
