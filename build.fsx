@@ -46,18 +46,19 @@ let downloadFile target url =
     do! c.AsyncDownloadFile(new Uri(url), target)
   }
 
-let ipyW workingDir args =
+let pythonPW pythonPath workingDir args =
   execute
-    (sprintf "Starting IronPython with '%s'" args)
-    "Failed to process ironpython command"
+    (sprintf "Starting Python with '%s'" args)
+    "Failed to process python command"
     (fun info ->
-      info.FileName <- System.IO.Path.GetFullPath "temp/IronPython/ipy.exe"
+      info.FileName <- System.IO.Path.GetFullPath "temp/python/python.exe"
       info.Arguments <- args
       info.WorkingDirectory <- workingDir
       let setVar k v =
           info.EnvironmentVariables.[k] <- v
-      setVar "PYTHONPATH" (Path.GetFullPath "temp/IronPython"))
-let ipy args = ipyW "temp/IronPython" args
+      setVar "PYTHONPATH" (pythonPath))
+let pythonW = pythonPW (Path.GetFullPath "temp/python")
+let python args = pythonW "temp/python" args
 
 let paketPath = ".paket" @@ "paket.exe"
 let paketStartInfo workingDirectory args =
@@ -86,94 +87,54 @@ let fakeStartInfo script workingDirectory args fsiargs environmentVars =
         setVar "FSI" fsiPath)
 
 
-Target "SetupIronPython" (fun _ ->
-    CleanDir "temp/IronPython"
-    CopyDir ("temp"@@"IronPython") ("packages"@@"IronPython"@@"lib"@@"Net45") (fun _ -> true)
-    CopyDir ("temp"@@"IronPython") ("packages"@@"IronPython"@@"tools") (fun _ -> true)
-
-    CopyDir ("temp"@@"IronPython") ("packages"@@"IronPython.StdLib"@@"content") (fun _ -> true)
-    ipy "-X:Frames -m ensurepip"
-
-    let installPackageE ext name version md5 =
-      let targetFile = sprintf "temp/IronPython/%s-%s%s" name version ext
-      downloadFile
-        targetFile
-        (sprintf "https://pypi.python.org/packages/source/p/%s/%s-%s%s#md5=%s" name name version ext md5)
-        |> Async.RunSynchronously
-      let distDir = "temp/IronPython/dist" // sprintf "temp/IronPython/%s-%s" name version
-      let targetDir = sprintf "%s/%s-%s" distDir name version
-      CleanDir targetDir
-      extract targetDir targetFile
-      let containsSetup dir = File.Exists (sprintf "%s/setup.py" dir)
-      if containsSetup targetDir then
-        ipyW targetDir "-X:Frames setup.py install"
-      else
-        let subDir = sprintf "%s/%s-%s" targetDir name version
-        if containsSetup subDir then
-          ipyW subDir "-X:Frames setup.py install"
-        else
-          failwith "Could not find setup.py in package!"
-    let installPackage = installPackageE ".tar.gz"
-
-    // Install patch, such that we can apply our patches :)
-    installPackageE ".zip" "patch" "1.16" "dbcbbd4e45ddd8baeb02bddf663a3176"
-    
-    let patch patchFile =
-      ipy (sprintf "-X:Frames -m patch -v ../../patches/%s" patchFile)
-
-    patch "patch_pip.patch"
-    
-    // install protobuf manually
+Target "SetupPython" (fun _ ->
+    // TODO if Windows then
+    let tag = "1.3.20160420"
+    let installer = "WinPython-64bit-3.5.1.3Zero.exe"
+    let installerPath = ("temp"@@installer)
     downloadFile
-      "temp/IronPython/protobuf-3.0.0a3-py2-none-any.whl"
-      "https://github.com/GoogleCloudPlatform/gcloud-python-wheels/raw/master/wheelhouse/protobuf-3.0.0a3-py2-none-any.whl"
+      installerPath
+      ("https://github.com/winpython/winpython/releases/download/" + tag + "/" + installer)
       |> Async.RunSynchronously
-    ipy "-X:Frames -m pip install protobuf-3.0.0a3-py2-none-any.whl"
+    let installerArgs = sprintf "/S \"/D=%s\"" (System.IO.Path.GetFullPath ("temp"@@"python_zero"))
+    execute
+      (sprintf "Starting Python Installer with '%s'" installerArgs)
+      "Failed to process python command"
+      (fun info ->
+        info.FileName <- System.IO.Path.GetFullPath (installerPath)
+        info.Arguments <- installerArgs
+        info.WorkingDirectory <- ""
+        let setVar k v =
+            info.EnvironmentVariables.[k] <- v
+        setVar "PYTHONPATH" (Path.GetFullPath "temp/python"))
+    if Directory.Exists ("temp"@@ (Path.GetFileNameWithoutExtension installer)) then
+      DeleteDir ("temp"@@"python_zero")
+      Directory.Move("temp"@@ (Path.GetFileNameWithoutExtension installer), "temp"@@"python_zero")
+    
+    DeleteDir ("temp"@@"python")
+    CopyDir ("temp"@@"python") ("temp"@@"python_zero"@@"python-3.5.1.amd64") (fun _ -> true)
 
-    // install pyasn1 manually
-    installPackage "pyasn1" "0.1.8" "7f6526f968986a789b1e5e372f0b7065"
+    python "-m pip install gmusicapi"
+    python "-m pip install pythonnet"
 
-    // install pyasn1-modules manually
-    installPackage "pyasn1-modules" "0.0.6" "3b94e7a4999bc7477b76c46c30a56727"
-
-    // TODO pycryptodome, 3.4 c626ba69eff9190d152537f93d488d4b
-
-    // Install pycrypto
-    ipy "-X:Frames -m easy_install http://www.voidspace.org.uk/downloads/pycrypto26/pycrypto-2.6.win32-py2.7.exe"
-    CopyDir 
-      ("temp"@@"IronPython"@@"Lib"@@"site-packages"@@"Crypto")
-      ("temp"@@"IronPython"@@"Lib"@@"site-packages"@@"pycrypto-2.6-py2.7-cli.egg"@@"Crypto")
-      (fun _ -> true)
     
     Git.Repository.cloneSingleBranch
       ("temp")
-      ("https://github.com/matthid/ironpycrypto.git")
-      "master"
-      "ironpycrypto"
-    execute
-      "Restoring packages for ironpycrypto"
-      "Restoring packages for ironpycrypto failed"
-      (paketStartInfo "temp/ironpycrypto" "restore")
-    execute
-      "Building ironpycrypto, this could take some time, please wait..."
-      "building ironpycrypto failed"
-      (fakeStartInfo "build.fsx" "temp/ironpycrypto" "" "" [])
-    CopyDir
-      ("temp"@@"IronPython"@@"Lib"@@"site-packages"@@"Crypto")
-      ("temp"@@"ironpycrypto"@@"Crypto")
-      (fun _ -> true)
-    CopyFile 
-      ("temp"@@"IronPython") 
-      ("temp"@@"ironpycrypto"@@"IronPyCrypto"@@"bin"@@"Release"@@"IronPyCrypto.dll")
+      ("https://github.com/matthid/pythonnet.git")
+      "myfixes"
+      "pythonnet"
+    let python_ = pythonW ("temp"@@"pythonnet")
+    python_ "-m pip install wheel"
+    python_ "-m pip install six"
 
-    DeleteDir ("temp"@@"IronPython"@@"Lib"@@"site-packages"@@"pycrypto-2.6-py2.7-cli.egg")
-
-    ipy "-X:Frames -m pip install http"
-    ipy "-X:Frames -m pip install gmusicapi"
+    python_ "setup.py bdist_wheel"
+    //python_ "-m pip install --no-cache-dir --force-reinstall --ignore-installed dist\pythonnet-2.1.0-cp34-cp34m-win32.whl"
+    python_ "-m pip install --no-cache-dir --force-reinstall --ignore-installed dist\pythonnet-2.1.0-cp35-cp35m-win_amd64.whl"
+    python_ @"src\tests\runtests.py"
 )
 
 Target "All" DoNothing
 
-"SetupIronPython" ==> "All"
+"SetupPython" ==> "All"
 
 RunTargetOrDefault "All"

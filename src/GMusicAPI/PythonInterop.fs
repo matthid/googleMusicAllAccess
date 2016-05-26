@@ -1,7 +1,7 @@
 ﻿module GMusicAPI.PythonInterop
 
 open FSharp.Interop.Dynamic
-System.Environment.CurrentDirectory <- @"C:\PROJ\googleMusicAllAccess\python"
+
 type PythonData<'a> =
   private { 
     Delayed : (unit -> 'a)
