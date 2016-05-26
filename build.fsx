@@ -6,6 +6,8 @@
 #r @"packages/build/FAKE/tools/FakeLib.dll"
 #r @"packages/build/sharpcompress/lib/net40/SharpCompress.dll"
 
+#load "InstallPython.fsx"
+open InstallPython
 
 open System
 open System.IO
@@ -18,33 +20,11 @@ open SharpCompress.Common
 
 Environment.CurrentDirectory <- __SOURCE_DIRECTORY__ 
 
-/// Run the given buildscript with FAKE.exe
-let executeWithOutput configStartInfo =
-    let exitCode =
-        ExecProcessWithLambdas
-            configStartInfo
-            TimeSpan.MaxValue false ignore ignore
-    System.Threading.Thread.Sleep 1000
-    exitCode
-
 let extract dir file =
   use stream = File.OpenRead(file)
   let reader = ReaderFactory.Open(stream)
   reader.WriteAllToDirectory (dir, ExtractOptions.ExtractFullPath)
 
-// Documentation
-let execute traceMsg failMessage configStartInfo =
-    trace traceMsg
-    let exit = executeWithOutput configStartInfo
-    if exit <> 0 then
-        failwith failMessage
-    ()
-
-let downloadFile target url =
-  async {
-    use c = new WebClient()
-    do! c.AsyncDownloadFile(new Uri(url), target)
-  }
 
 let pythonPW pythonPath workingDir args =
   execute
@@ -88,41 +68,18 @@ let fakeStartInfo script workingDirectory args fsiargs environmentVars =
 
 
 Target "SetupPython" (fun _ ->
-    // TODO if Windows then
-    let tag = "1.3.20160420"
-    let installer = "WinPython-64bit-3.5.1.3Zero.exe"
-    let installerPath = ("temp"@@installer)
-    downloadFile
-      installerPath
-      ("https://github.com/winpython/winpython/releases/download/" + tag + "/" + installer)
-      |> Async.RunSynchronously
-    let installerArgs = sprintf "/S \"/D=%s\"" (System.IO.Path.GetFullPath ("temp"@@"python_zero"))
-    execute
-      (sprintf "Starting Python Installer with '%s'" installerArgs)
-      "Failed to process python command"
-      (fun info ->
-        info.FileName <- System.IO.Path.GetFullPath (installerPath)
-        info.Arguments <- installerArgs
-        info.WorkingDirectory <- ""
-        let setVar k v =
-            info.EnvironmentVariables.[k] <- v
-        setVar "PYTHONPATH" (Path.GetFullPath "temp/python"))
-    if Directory.Exists ("temp"@@ (Path.GetFileNameWithoutExtension installer)) then
-      DeleteDir ("temp"@@"python_zero")
-      Directory.Move("temp"@@ (Path.GetFileNameWithoutExtension installer), "temp"@@"python_zero")
-    
-    DeleteDir ("temp"@@"python")
-    CopyDir ("temp"@@"python") ("temp"@@"python_zero"@@"python-3.5.1.amd64") (fun _ -> true)
-
+    if not (Directory.Exists ("temp"@@"python")) then
+      installPython ("temp"@@"python")
     python "-m pip install gmusicapi"
     python "-m pip install pythonnet"
 
     
-    Git.Repository.cloneSingleBranch
-      ("temp")
-      ("https://github.com/matthid/pythonnet.git")
-      "myfixes"
-      "pythonnet"
+    if not (Directory.Exists ("temp"@@"pythonnet")) then
+      Git.Repository.cloneSingleBranch
+        ("temp")
+        ("https://github.com/matthid/pythonnet.git")
+        "myfixes"
+        "pythonnet"
     let python_ = pythonW ("temp"@@"pythonnet")
     python_ "-m pip install wheel"
     python_ "-m pip install six"
