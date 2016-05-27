@@ -3,6 +3,14 @@ open GMusicAPI.PythonInterop
 open Python.Runtime
 open FSharp.Interop.Dynamic
 
+let initialize pythonDir =
+  let prev = System.Environment.CurrentDirectory
+  try
+    System.Environment.CurrentDirectory <- pythonDir
+    Python.Runtime.PythonEngine.Initialize()
+  finally
+    System.Environment.CurrentDirectory <- prev
+
 type GMusicAPI = 
 #if INTERACTIVE
   internal
@@ -20,7 +28,14 @@ type MobileClient =
 
 let getGMusicApi =
   python {
-    return { GMusicAPIHandle = Py.Import("gmusicapi") }
+    let imported = Py.Import("gmusicapi")
+    if isNull imported || imported.Handle = System.IntPtr.Zero then
+      printfn "import gmusicapi returned null"
+      if (Exceptions.ErrorOccurred()) then
+        raise <| new PythonException()
+      failwith "Could not import gmusicapi"
+      |> ignore
+    return { GMusicAPIHandle = imported }
   }
 
 

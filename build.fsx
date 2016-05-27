@@ -40,6 +40,10 @@ let pythonPW pythonPath workingDir args =
 let pythonW = pythonPW (Path.GetFullPath "temp/python")
 let python args = pythonW "temp/python" args
 
+let fsiAnyCpuPath = 
+  let any = Path.GetDirectoryName(fsiPath) @@ "fsiAnyCPU.exe"
+  if File.Exists any then any else fsiPath
+
 let paketPath = ".paket" @@ "paket.exe"
 let paketStartInfo workingDirectory args =
     (fun (info: System.Diagnostics.ProcessStartInfo) ->
@@ -50,13 +54,13 @@ let paketStartInfo workingDirectory args =
             info.EnvironmentVariables.[k] <- v
         setVar "MSBuild" msBuildExe
         setVar "GIT" Git.CommandHelper.gitPath
-        setVar "FSI" fsiPath)
+        setVar "FSI" fsiAnyCpuPath)
 
-let fakePath = "packages" @@ "build" @@ "FAKE" @@ "tools" @@ "FAKE.exe"
-let fakeStartInfo script workingDirectory args fsiargs environmentVars =
+
+let fsiStartInfo script workingDirectory args environmentVars =
     (fun (info: System.Diagnostics.ProcessStartInfo) ->
-        info.FileName <- System.IO.Path.GetFullPath fakePath
-        info.Arguments <- sprintf "%s --fsiargs -d:FAKE %s \"%s\"" args fsiargs script
+        info.FileName <- fsiAnyCpuPath
+        info.Arguments <- sprintf "%s -d:FAKE \"%s\"" args script
         info.WorkingDirectory <- workingDirectory
         let setVar k v =
             info.EnvironmentVariables.[k] <- v
@@ -64,7 +68,7 @@ let fakeStartInfo script workingDirectory args fsiargs environmentVars =
             setVar k v
         setVar "MSBuild" msBuildExe
         setVar "GIT" Git.CommandHelper.gitPath
-        setVar "FSI" fsiPath)
+        setVar "FSI" fsiAnyCpuPath)
 
 
 Target "SetupPython" (fun _ ->
@@ -105,6 +109,13 @@ Target "CopyToRelease" (fun _ ->
     ensureDirectory ("release"@@"lib")
     for f in files do
       CopyFile ("release"@@"lib") ("src"@@"GMusicAPI"@@"bin"@@"Release"@@f)
+)
+
+Target "Test" (fun _ ->
+  execute
+    "Starting Fake Tests"
+    "Some Tests failed"
+    (fsiStartInfo "Tests.fsx" "" "" [])
 )
 
 /// push package (and try again if something fails), FAKE Version doesn't work on mono
@@ -204,6 +215,7 @@ Target "Release" DoNothing
 "SetupPython"
   ==> "Build"
   ==> "CopyToRelease"
+  ==> "Test"
   ==> "PackageNuGet"
   ==> "All"
 

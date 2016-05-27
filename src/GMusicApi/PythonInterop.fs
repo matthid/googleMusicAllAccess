@@ -33,7 +33,7 @@ type PythonBuilder() =
 
     member x.Delay (f : unit -> PythonData<_>) = 
       (fun () -> f() |> getPythonData) |> pythonFunc
-    member x.Combine (v, f:unit -> _) = x.Bind(v, f)
+    member x.Combine (v, next) = x.Bind(v, fun () -> next)
     member x.Run (f) = f
     member x.Zero () = (fun () -> ()) |> pythonFunc
 
