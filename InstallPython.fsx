@@ -1,6 +1,8 @@
 
+#if !FAKE
 #I @"packages/build/FAKE/tools"
 #r @"packages/build/FAKE/tools/FakeLib.dll"
+#endif
 
 open System
 open System.IO
