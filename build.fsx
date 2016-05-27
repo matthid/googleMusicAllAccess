@@ -176,10 +176,41 @@ Target "PackageNuGet" (fun _ ->
       }) (Path.Combine("nuget", "GMusicApi.nuspec"))
 )
 
+Target "NuGetPush" (fun _ ->
+    let packagePushed =
+      try
+        let packSetup = packSetup "10.0.0-alpha"
+        let parameters = NuGetDefaults() |> (fun p -> 
+          { packSetup p with 
+              Publish = true
+              Dependencies = 
+                [ "FSharp.Interop.Dynamic"
+                  "FSharp.Core" ]
+                |> List.map (fun name -> name, (GetPackageVersion "packages" name)) })
+        // This allows us to specify packages which we do not want to push...
+        if hasBuildParam "nugetkey" && parameters.Publish then publish parameters
+        else true
+      with e -> 
+        trace (sprintf "Could not push package '%s': %O" ("GMusicApi") e)
+        false
+
+    if not packagePushed then
+      failwithf "No package could be pushed!"
+)
+
 Target "All" DoNothing
+Target "Release" DoNothing
 
 "SetupPython"
   ==> "Build"
+  ==> "CopyToRelease"
+  ==> "PackageNuGet"
   ==> "All"
 
+"All"
+  ==> "NuGetPush"
+  ==> "Release"
+
 RunTargetOrDefault "All"
+
+
