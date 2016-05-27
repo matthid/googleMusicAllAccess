@@ -14,6 +14,8 @@ let sysConfig =
   { Arch = Amd64; PythonVersion = new System.Version(3,5,1,3) }
 let pythonnetVersion = "2.1.0"
 
+let nugetVersion = "10.0.0-alpha2"
+
 open System
 open System.IO
 open System.Net
@@ -99,11 +101,14 @@ Target "SetupPython" (fun _ ->
     python_ "setup.py bdist_wheel"
     let simplePyVersion = sprintf "%d%d" sysConfig.PythonVersion.Major sysConfig.PythonVersion.Minor
     let simpleDotPyVersion = sprintf "%d.%d" sysConfig.PythonVersion.Major sysConfig.PythonVersion.Minor
-    let distName = sprintf "pythonnet-%s-cp%s-cp%sm-%s.whl" pythonnetVersion simplePyVersion simplePyVersion sysConfig.Arch.ArchString
+    let pyNetArchDistString =
+      match sysConfig.Arch with
+      | Amd64 -> sprintf "win_%s" sysConfig.Arch.ArchString
+      | _ -> sysConfig.Arch.ArchString
+    let distName = sprintf "pythonnet-%s-cp%s-cp%sm-%s.whl" pythonnetVersion simplePyVersion simplePyVersion pyNetArchDistString
     python_ (sprintf "-m pip install --no-cache-dir --force-reinstall --ignore-installed dist\%s" distName)
 
     let pythonTest = pythonPW (Path.GetFullPath("temp"@@"pythonnet"@@"testdir")) ("temp"@@"pythonnet")
-    
     let pyNetArchString =
       match sysConfig.Arch with
       | Amd64 -> sprintf "win-%s" sysConfig.Arch.ArchString
@@ -195,7 +200,7 @@ let packSetup version p =
 
 Target "PackageNuGet" (fun _ ->
     ensureDirectory ("release"@@"nuget")
-    let packSetup = packSetup "10.0.0-alpha"
+    let packSetup = packSetup nugetVersion
     NuGet (fun p -> 
       { (packSetup) p with 
           Publish = false
@@ -209,7 +214,7 @@ Target "PackageNuGet" (fun _ ->
 Target "NuGetPush" (fun _ ->
     let packagePushed =
       try
-        let packSetup = packSetup "10.0.0-alpha"
+        let packSetup = packSetup nugetVersion
         let parameters = NuGetDefaults() |> (fun p -> 
           { packSetup p with 
               Publish = true

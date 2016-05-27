@@ -146,6 +146,7 @@ type TrackInfo =
     Title : string
     NId : string
     EstimatedSize : string
+    Year : int
     AlbumId : string
     ArtistId : string list
     AlbumArtist : string
@@ -162,11 +163,12 @@ let getTrackInfo (trackId:string) { MobileClientHandle = mobileClient } =
   python {
     let trackInfo:PyObject = mobileClient?get_track_info(trackId)
     let d = ofPyDict trackInfo
-    debugDict "getTrackInfo" 21 d
+    debugDict "getTrackInfo" 22 d
     return 
       { Album = asType<string> d.["album"]
         ExplicitType = asType<string> d.["explicitType"]
         Kind = asType<string> d.["kind"]
+        Year = asType<int> d.["year"]
         StoreId = asType<string> d.["storeId"]
         Artist = asType<string> d.["artist"]
         AlbumArtRef = []
