@@ -78,14 +78,20 @@ type RegisteredDevice =
     LastAccessedTimeMs : string
     Type : string
     SmartPhone : bool }
-let debugDict name expectedMax (d:System.Collections.Generic.IDictionary<string,_>) =
-  if d.Count > expectedMax then
-    printf "Dictionary in '%s' contains unexpected values: %s" name (System.String.Join(",", d.Keys))
+let debugDict name expectedKeys (d:System.Collections.Generic.IReadOnlyDictionary<string, PyObject>) =
+  for k in d.Keys do
+    if expectedKeys |> Seq.exists (fun exp -> exp = k) |> not then
+      let tryVal =
+        match d.TryGetValue k with
+        | true, value ->
+          value.Repr()
+        | _ -> "{NOTFOUND}"
+      printfn "Dictionary in '%s' contains unexpected key: '%s' (%s)" name k tryVal
   ()
 
 let internal parseRegisteredDevice (o:PyObject) =
   let d = ofPyDict o
-  debugDict "getRegisteredDevices" 6 d
+  debugDict "getRegisteredDevices" [ "kind"; "friendlyName"; "id"; "lastAccessedTimeMs"; "type"; "smartPhone" ] d
   { Kind = asType<string> d.["kind"]
     FriendlyName =
       match d.TryGetValue "friendlyName" with
@@ -135,22 +141,54 @@ let getStreamUrl (deviceId: string option) (quality: StreamQuality option) (trac
     return asType<string> streamUrl
   }
 
+type VidThumb =
+  { Width : int
+    Height : int
+    Url : string }
+let internal parseVidThumb (o : PyObject) =
+  let d = ofPyDict o
+  debugDict "parseVidRef" ["width"; "height"; "url" ] d
+  { Width = asType<int> d.["width"]
+    Height = asType<int> d.["height"]
+    Url = asType<string> d.["url"] }
+type VidRef =
+  { Kind : string
+    Thumbnails : VidThumb list
+    /// Youtube Id https://www.youtube.com/watch?v=%s for Url
+    Id : string }
+let internal parseVidRef (o : PyObject) =
+  let d = ofPyDict o
+  debugDict "parseVidRef" ["kind"; "thumbnails"; "id" ] d
+  { Kind = asType<string> d.["kind"]
+    Thumbnails = 
+      asEnumerable d.["thumbnails"]
+      |> Seq.map parseVidThumb
+      |> Seq.toList
+    Id = asType<string> d.["id"] }
 type ArtRef =
   { Kind : string
     Autogen : bool
     Url : string
     AspectRatio : string }
+let internal parseAlbumRef (o:PyObject) =
+  let d = ofPyDict o
+  debugDict "parseAlbumRef" [ "kind"; "autogen"; "url"; "aspectRatio" ] d
+  { Kind = asType<string> d.["kind"]
+    Autogen = asType<bool> d.["autogen"]
+    Url = asType<string> d.["url"]
+    AspectRatio = asType<string> d.["aspectRatio"] }
 type TrackInfo =
   { Album : string
     ExplicitType : string
     Kind : string
+    PrimaryVideo : VidRef option
     StoreId : string
     Artist : string
     AlbumArtRef : ArtRef list
     Title : string
     NId : string
     EstimatedSize : string
-    Year : int
+    Year : int option
     AlbumId : string
     ArtistId : string list
     AlbumArtist : string
@@ -163,19 +201,25 @@ type TrackInfo =
     TrackAvailableForSubscription : bool
     TrackType : string
     AlbumAvailableForPurchase : bool }
-let internal parseAlbumRef (o:PyObject) =
-  let d = ofPyDict o
-  { Kind = asType<string> d.["kind"]
-    Autogen = asType<bool> d.["autogen"]
-    Url = asType<string> d.["url"]
-    AspectRatio = asType<string> d.["aspectRatio"] }
+
 let internal parseTrackInfo (o : PyObject) =
   let d = ofPyDict o
-  debugDict "getTrackInfo" 22 d
+  debugDict "getTrackInfo"
+    ["album"; "explicitType"; "kind"; "year"; "storeId"; "artist"; "albumArtRef"; "title";
+     "nid"; "estimatedSize"; "albumId"; "artistId"; "albumArtist"; "durationMillis"; 
+     "composer"; "genre"; "trackNumber"; "discNumber"; "trackAvailableForPurchase";
+     "trackAvailableForSubscription"; "trackType"; "albumAvailableForPurchase" ] d
   { Album = asType<string> d.["album"]
     ExplicitType = asType<string> d.["explicitType"]
     Kind = asType<string> d.["kind"]
-    Year = asType<int> d.["year"]
+    PrimaryVideo =
+      match d.TryGetValue "primaryVideo" with
+      | true, v -> Some (parseVidRef v)
+      | _ -> None
+    Year = 
+      match d.TryGetValue("year") with
+      | true, y -> Some (asType<int> y)
+      | _ -> None
     StoreId = asType<string> d.["storeId"]
     Artist = asType<string> d.["artist"]
     AlbumArtRef = 

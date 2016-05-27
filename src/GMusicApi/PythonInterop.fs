@@ -56,9 +56,25 @@ let internal ofPyList (p : PyObject) =
   
 let internal ofPyDict (p : PyObject) =
   let pyDict = new PyDict(p)
-  asEnumerable (pyDict.Keys())
-  |> Seq.map (fun k -> 
-    let str = k.ToString()
-    str,
-    pyDict.[str])
-  |> dict
+  let d =
+    asEnumerable (pyDict.Keys())
+    |> Seq.map (fun k -> 
+      let str = k.ToString()
+      str,
+      pyDict.[str])
+    |> dict
+  { new System.Collections.Generic.IReadOnlyDictionary<string, PyObject> with
+      member x.TryGetValue(s, v) = 
+        match d.TryGetValue(s) with
+        | true, m -> v <- m; true
+        | _ -> false
+      member x.ContainsKey k = d.ContainsKey k
+      member x.get_Item k = 
+        match d.TryGetValue k with
+        | true, v -> v
+        | _ -> raise <| System.Collections.Generic.KeyNotFoundException(sprintf "Key '%s' was not found in object" k)
+      member x.Keys = d.Keys :> System.Collections.Generic.IEnumerable<_>
+      member x.Values = d.Values :> System.Collections.Generic.IEnumerable<_>
+      member x.Count = d.Count
+      member x.GetEnumerator() = d.GetEnumerator() :> System.Collections.IEnumerator
+      member x.GetEnumerator () = d.GetEnumerator() }
