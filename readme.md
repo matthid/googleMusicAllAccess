@@ -7,7 +7,7 @@ Building:
 
 1. Open Git Bash and navigate to project
 2. ./build.sh
-
+   This will setup and download everything you need (python + python packages, nuget packages, ...)
 
 Using:
 
