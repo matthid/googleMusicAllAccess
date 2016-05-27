@@ -9,6 +9,11 @@
 #load "InstallPython.fsx"
 open InstallPython
 
+let winPythonTag = "1.3.20160420"
+let sysConfig =
+  { Arch = Amd64; PythonVersion = new System.Version(3,5,1,3) }
+let pythonnetVersion = "2.1.0"
+
 open System
 open System.IO
 open System.Net
@@ -40,9 +45,13 @@ let pythonPW pythonPath workingDir args =
 let pythonW = pythonPW (Path.GetFullPath "temp/python")
 let python args = pythonW "temp/python" args
 
-let fsiAnyCpuPath = 
-  let any = Path.GetDirectoryName(fsiPath) @@ "fsiAnyCPU.exe"
-  if File.Exists any then any else fsiPath
+let correctFsi =
+  let any =
+    let any = Path.GetDirectoryName(fsiPath) @@ "fsiAnyCPU.exe"
+    if File.Exists any then any else fsiPath
+  match sysConfig.Arch with
+  | Amd64 -> any
+  | Win32 -> fsiPath
 
 let paketPath = ".paket" @@ "paket.exe"
 let paketStartInfo workingDirectory args =
@@ -54,12 +63,12 @@ let paketStartInfo workingDirectory args =
             info.EnvironmentVariables.[k] <- v
         setVar "MSBuild" msBuildExe
         setVar "GIT" Git.CommandHelper.gitPath
-        setVar "FSI" fsiAnyCpuPath)
+        setVar "FSI" correctFsi)
 
 
 let fsiStartInfo script workingDirectory args environmentVars =
     (fun (info: System.Diagnostics.ProcessStartInfo) ->
-        info.FileName <- fsiAnyCpuPath
+        info.FileName <- correctFsi
         info.Arguments <- sprintf "%s -d:FAKE \"%s\"" args script
         info.WorkingDirectory <- workingDirectory
         let setVar k v =
@@ -68,12 +77,11 @@ let fsiStartInfo script workingDirectory args environmentVars =
             setVar k v
         setVar "MSBuild" msBuildExe
         setVar "GIT" Git.CommandHelper.gitPath
-        setVar "FSI" fsiAnyCpuPath)
-
+        setVar "FSI" correctFsi)
 
 Target "SetupPython" (fun _ ->
     if not (Directory.Exists ("temp"@@"python")) then
-      installPython ("temp"@@"python")
+      installPython_Windows winPythonTag sysConfig ("temp"@@"python")
     python "-m pip install gmusicapi"
     python "-m pip install pythonnet"
 
@@ -89,18 +97,29 @@ Target "SetupPython" (fun _ ->
     python_ "-m pip install six"
 
     python_ "setup.py bdist_wheel"
-    //python_ "-m pip install --no-cache-dir --force-reinstall --ignore-installed dist\pythonnet-2.1.0-cp34-cp34m-win32.whl"
-    python_ "-m pip install --no-cache-dir --force-reinstall --ignore-installed dist\pythonnet-2.1.0-cp35-cp35m-win_amd64.whl"
-    
+    let simplePyVersion = sprintf "%d%d" sysConfig.PythonVersion.Major sysConfig.PythonVersion.Minor
+    let simpleDotPyVersion = sprintf "%d.%d" sysConfig.PythonVersion.Major sysConfig.PythonVersion.Minor
+    let distName = sprintf "pythonnet-%s-cp%s-cp%sm-%s.whl" pythonnetVersion simplePyVersion simplePyVersion sysConfig.Arch.ArchString
+    python_ (sprintf "-m pip install --no-cache-dir --force-reinstall --ignore-installed dist\%s" distName)
+
     let pythonTest = pythonPW (Path.GetFullPath("temp"@@"pythonnet"@@"testdir")) ("temp"@@"pythonnet")
     
-    CopyDir ("temp"@@"pythonnet"@@"testdir") ("temp"@@"pythonnet"@@"build"@@"lib.win-amd64-3.5") (fun _ -> true)
+    let pyNetArchString =
+      match sysConfig.Arch with
+      | Amd64 -> sprintf "win-%s" sysConfig.Arch.ArchString
+      | _ -> sysConfig.Arch.ArchString
+    CopyDir ("temp"@@"pythonnet"@@"testdir") ("temp"@@"pythonnet"@@"build"@@ sprintf "lib.%s-%s" pyNetArchString simpleDotPyVersion) (fun _ -> true)
     pythonTest @"src\tests\runtests.py"
 )
 
+let buildArchString =
+  match sysConfig.Arch with
+  | Amd64 -> "x64"
+  | Win32 -> "x86"
+let buildNameString = sprintf "Release_%s" buildArchString
 Target "Build" (fun _ ->
     !! "src/GMusicApi.sln"
-    |> MSBuildRelease "" "Rebuild"
+    |> MSBuildReleaseExt "" [ "Configuration", buildNameString ] "Rebuild"
     |> ignore
 )
 
@@ -108,7 +127,7 @@ Target "CopyToRelease" (fun _ ->
     let files = [ "GMusicAPI.dll"; "GMusicAPI.XML" ]
     ensureDirectory ("release"@@"lib")
     for f in files do
-      CopyFile ("release"@@"lib") ("src"@@"GMusicAPI"@@"bin"@@"Release"@@f)
+      CopyFile ("release"@@"lib") ("src"@@"GMusicAPI"@@"bin"@@buildNameString@@f)
 )
 
 Target "Test" (fun _ ->

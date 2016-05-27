@@ -7,6 +7,19 @@ let initialize pythonDir =
   let prev = System.Environment.CurrentDirectory
   try
     System.Environment.CurrentDirectory <- pythonDir
+    let oldPyPaths =
+      let envVar = System.Environment.GetEnvironmentVariable("PYTHONPATH")
+      if isNull envVar then []
+      else
+        envVar.Split([|System.IO.Path.PathSeparator|], System.StringSplitOptions.RemoveEmptyEntries)
+        |> Seq.toList
+    let join (paths: _ seq) = System.String.Join(string System.IO.Path.PathSeparator, paths)
+    let newPaths =
+      [ "."; "lib"; System.IO.Path.Combine("lib", "site-packages"); "DLLs" ]
+      |> List.map (fun e -> System.IO.Path.Combine(pythonDir, e))
+    let pythonZips = System.IO.Directory.EnumerateFiles(pythonDir, "python*.zip") |> Seq.toList
+    let combinedPaths = pythonZips @ newPaths @ oldPyPaths
+    System.Environment.SetEnvironmentVariable ("PYTHONPATH", join combinedPaths)
     Python.Runtime.PythonEngine.Initialize()
   finally
     System.Environment.CurrentDirectory <- prev
