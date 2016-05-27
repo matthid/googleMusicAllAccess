@@ -22,20 +22,20 @@ let runInPython f =
   f |> getPythonData
   
 type PythonBuilder() =
-    member this.Bind((x : PythonData<_>), f) =
+    member x.Bind((d : PythonData<_>), f) =
         (fun () -> 
-          let r = x |> getPythonData
+          let r = d |> getPythonData
           f r |> getPythonData
           ) |> pythonFunc
 
-    member this.Return(x) = 
-        (fun () -> x) |> pythonFunc
+    member x.Return(d) = 
+        (fun () -> d) |> pythonFunc
 
     member x.Delay (f : unit -> PythonData<_>) = 
       (fun () -> f() |> getPythonData) |> pythonFunc
     member x.Combine (v, f:unit -> _) = x.Bind(v, f)
-    member this.Run (f) = f
-    member this.Zero () = (fun () -> ()) |> pythonFunc
+    member x.Run (f) = f
+    member x.Zero () = (fun () -> ()) |> pythonFunc
 
 let python = PythonBuilder()
 
