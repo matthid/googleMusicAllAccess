@@ -3,7 +3,15 @@
 
 #r @"C:\PROJ\googleMusicAllAccess\packages\Dynamitey\lib\net40\Dynamitey.dll"
 #r @"C:\PROJ\googleMusicAllAccess\packages\FSharp.Interop.Dynamic\lib\portable-net45+sl50+win\FSharp.Interop.Dynamic.dll"
-#r @"C:\PROJ\googleMusicAllAccess\temp\pythonnet\build\lib.win32-3.4\Python.Runtime.dll";;
+#r @"C:\PROJ\googleMusicAllAccess\temp\python\Lib\site-packages\Python.Runtime.dll"
+
+// Needs to be executed twice. First time the F# compiler will crash with 'error FS0193: internal error: Illegal characters in path.'
+let prev = System.Environment.CurrentDirectory
+try
+  System.Environment.CurrentDirectory <- @"C:\PROJ\googleMusicAllAccess\temp\python"
+  Python.Runtime.PythonEngine.Initialize()
+finally
+  System.Environment.CurrentDirectory <- prev
 
 #load "StringCypher.fs"
 #load "PythonInterop.fs"

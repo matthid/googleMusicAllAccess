@@ -18,7 +18,7 @@ open SharpCompress.Reader
 open SharpCompress.Archive
 open SharpCompress.Common
 
-Environment.CurrentDirectory <- __SOURCE_DIRECTORY__ 
+Environment.CurrentDirectory <- __SOURCE_DIRECTORY__
 
 let extract dir file =
   use stream = File.OpenRead(file)
@@ -94,8 +94,92 @@ Target "SetupPython" (fun _ ->
     pythonTest @"src\tests\runtests.py"
 )
 
+Target "Build" (fun _ ->
+    !! "src/GMusicApi.sln"
+    |> MSBuildRelease "" "Rebuild"
+    |> ignore
+)
+
+Target "CopyToRelease" (fun _ ->
+    let files = [ "GMusicAPI.dll"; "GMusicAPI.XML" ]
+    ensureDirectory ("release"@@"lib")
+    for f in files do
+      CopyFile ("release"@@"lib") ("src"@@"GMusicAPI"@@"bin"@@"Release"@@f)
+)
+
+/// push package (and try again if something fails), FAKE Version doesn't work on mono
+/// From https://raw.githubusercontent.com/fsharp/FAKE/master/src/app/FakeLib/NuGet/NugetHelper.fs
+let rec private publish parameters =
+    let replaceAccessKey key (text : string) =
+        if isNullOrEmpty key then text
+        else text.Replace(key, "PRIVATEKEY")
+    let nuspec = sprintf "%s.%s.nupkg" parameters.Project parameters.Version
+    traceStartTask "MyNuGetPublish" nuspec
+    let tracing = enableProcessTracing
+    enableProcessTracing <- false
+    let source =
+        if isNullOrEmpty parameters.PublishUrl then ""
+        else sprintf "-s %s" parameters.PublishUrl
+
+    let args = sprintf "push \"%s\" %s %s" (parameters.OutputPath @@ nuspec) parameters.AccessKey source
+    tracefn "%s %s in WorkingDir: %s Trials left: %d" parameters.ToolPath (replaceAccessKey parameters.AccessKey args)
+        (FullName parameters.WorkingDir) parameters.PublishTrials
+    try
+      try
+        let result =
+            ExecProcess (fun info ->
+                info.FileName <- parameters.ToolPath
+                info.WorkingDirectory <- FullName parameters.WorkingDir
+                info.Arguments <- args) parameters.TimeOut
+        enableProcessTracing <- tracing
+        if result <> 0 then failwithf "Error during NuGet push. %s %s" parameters.ToolPath args
+        true
+      with exn ->
+        let existsError = exn.Message.Contains("already exists and cannot be modified")
+        if existsError then
+          trace exn.Message
+          false
+        else
+          if parameters.PublishTrials > 0 then publish { parameters with PublishTrials = parameters.PublishTrials - 1 }
+          else
+            (if not (isNull exn.InnerException) then exn.Message + "\r\n" + exn.InnerException.Message
+             else exn.Message)
+            |> replaceAccessKey parameters.AccessKey
+            |> failwith
+    finally
+      traceEndTask "MyNuGetPublish" nuspec
+
+let packSetup version p =
+  { p with
+      Authors = ["Matthias Dittrich"]
+      Project = "GMusicApi"
+      Summary = "Wrapper around https://github.com/simon-weber/gmusicapi"
+      Version = version
+      Description = "Wrapper around https://github.com/simon-weber/gmusicapi"
+      Tags = "python google music all access fsharp csharp dll"
+      WorkingDir = "."
+      OutputPath = "release"@@"nuget"
+      AccessKey = getBuildParamOrDefault "nugetkey" ""
+      Publish = false
+      Dependencies = [ ] }
+
+Target "PackageNuGet" (fun _ ->
+    ensureDirectory ("release"@@"nuget")
+    let packSetup = packSetup "10.0.0-alpha"
+    NuGet (fun p -> 
+      { (packSetup) p with 
+          Publish = false
+          Dependencies = 
+            [ "FSharp.Interop.Dynamic"
+              "FSharp.Core" ]
+            |> List.map (fun name -> name, (GetPackageVersion "packages" name))
+      }) (Path.Combine("nuget", "GMusicApi.nuspec"))
+)
+
 Target "All" DoNothing
 
-"SetupPython" ==> "All"
+"SetupPython"
+  ==> "Build"
+  ==> "All"
 
 RunTargetOrDefault "All"
