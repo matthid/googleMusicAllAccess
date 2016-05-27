@@ -11,7 +11,7 @@ Building:
 
 Using:
 
-1. Reference GMusicApi nuget package
+1. Reference GMusicApi (https://www.nuget.org/packages/GMusicApi) nuget package
 2. Copy InstallPython.fsx to your project (use paket file references to keep it up2date)
 3. Set your platform target to x64
 4. Run InstallPython.installPython ("temp/python")
