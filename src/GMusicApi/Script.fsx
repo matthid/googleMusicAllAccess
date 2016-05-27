@@ -5,21 +5,15 @@
 #r @"C:\PROJ\googleMusicAllAccess\packages\FSharp.Interop.Dynamic\lib\portable-net45+sl50+win\FSharp.Interop.Dynamic.dll"
 #r @"C:\PROJ\googleMusicAllAccess\temp\python\Lib\site-packages\Python.Runtime.dll"
 
-// Needs to be executed twice. First time the F# compiler will crash with 'error FS0193: internal error: Illegal characters in path.'
-let prev = System.Environment.CurrentDirectory
-try
-  System.Environment.CurrentDirectory <- @"C:\PROJ\googleMusicAllAccess\temp\python"
-  Python.Runtime.PythonEngine.Initialize()
-finally
-  System.Environment.CurrentDirectory <- prev
 
 #load "StringCypher.fs"
 #load "PythonInterop.fs"
 #load "GMusicApi.fs"
 
 open GMusicAPI
-open GMusicAPI.PythonInterop
-open GMusicAPI.GMusicAPI
+
+// Needs to be executed twice. First time the F# compiler will crash with 'error FS0193: internal error: Illegal characters in path.'
+GMusicAPI.initialize @"C:\PROJ\googleMusicAllAccess\temp\python"
 
 let getEnv envVar =
   System.Environment.GetEnvironmentVariable envVar
@@ -36,14 +30,15 @@ let android_id = getEnv "AndroidId"
 
 let trackId = "Teaherncwq37g2ebmoaqzl775d4";;
 
-let mb = createMobileClient() |> runInPython
-let mobileClient = mb.MobileClientHandle
+let mb = GMusicAPI.createMobileClient true false true |> PythonInterop.runInPython
 
-let d = login None email password android_id mb  |> runInPython;;
-let devices = getRegisteredDevices mb |> runInPython |> Seq.toList
-let trackInfo = getTrackInfo "Teaherncwq37g2ebmoaqzl775d4" mb |> runInPython
+let d = GMusicAPI.login mb None email password android_id  |> PythonInterop.runInPython;;
+let devices = GMusicAPI.getRegisteredDevices mb |> PythonInterop.runInPython |> Seq.toList
+let trackInfo = GMusicAPI.getTrackInfo mb "Teaherncwq37g2ebmoaqzl775d4"  |> PythonInterop.runInPython
 
-
+GMusicAPI.getAllPlaylists mb true |> PythonInterop.runInPython
+GMusicAPI.getAllUserPlayListContents mb  |> PythonInterop.runInPython
+GMusicAPI.getSharedPlaylistContents mb "AMaBXykNDUriQwFYwHcuH3tLgKC9fCMZsm7KhfXLdVvBHOK8egCU1UvfIB7k0qZ2PWNN2MJu_kpo-YEkY5V27IV8yUw-yU6WJw==" |> PythonInterop.runInPython
 //gil.Dispose()
 // Define your library scripting code here
 
