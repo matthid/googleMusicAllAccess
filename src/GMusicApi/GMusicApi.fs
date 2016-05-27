@@ -82,26 +82,30 @@ let debugDict name expectedMax (d:System.Collections.Generic.IDictionary<string,
   if d.Count > expectedMax then
     printf "Dictionary in '%s' contains unexpected values: %s" name (System.String.Join(",", d.Keys))
   ()
+
+let internal parseRegisteredDevice (o:PyObject) =
+  let d = ofPyDict o
+  debugDict "getRegisteredDevices" 6 d
+  { Kind = asType<string> d.["kind"]
+    FriendlyName =
+      match d.TryGetValue "friendlyName" with
+      | true, v -> Some (asType<string> v)
+      | _ -> None
+    Id = asType<string> d.["id"]
+    LastAccessedTimeMs = asType<string> d.["lastAccessedTimeMs"]
+    Type = asType<string> d.["type"]
+    SmartPhone =
+      match d.TryGetValue("smartPhone") with
+      | true, v -> asType<bool> v
+      | _ -> false }
+
 let getRegisteredDevices { MobileClientHandle = mobileClient } =
   python {
     let (rawDevicesList:PyObject) = mobileClient?get_registered_devices()
     return
       asEnumerable rawDevicesList
-      |> Seq.map (ofPyDict)
-      |> Seq.map (fun (d) ->
-        debugDict "getRegisteredDevices" 6 d
-        { Kind = asType<string> d.["kind"]
-          FriendlyName =
-            match d.TryGetValue "friendlyName" with
-            | true, v -> Some (asType<string> v)
-            | _ -> None
-          Id = asType<string> d.["id"]
-          LastAccessedTimeMs = asType<string> d.["lastAccessedTimeMs"]
-          Type = asType<string> d.["type"]
-          SmartPhone =
-            match d.TryGetValue("smartPhone") with
-            | true, v -> asType<bool> v
-            | _ -> false })
+      |> Seq.map (parseRegisteredDevice)
+      |> Seq.toList
   }
 let isSubscribed { MobileClientHandle = mobileClient } =
   python {
@@ -135,7 +139,7 @@ type ArtRef =
   { Kind : string
     Autogen : bool
     Url : string
-    AspectRation : string }
+    AspectRatio : string }
 type TrackInfo =
   { Album : string
     ExplicitType : string
@@ -159,33 +163,47 @@ type TrackInfo =
     TrackAvailableForSubscription : bool
     TrackType : string
     AlbumAvailableForPurchase : bool }
+let internal parseAlbumRef (o:PyObject) =
+  let d = ofPyDict o
+  { Kind = asType<string> d.["kind"]
+    Autogen = asType<bool> d.["autogen"]
+    Url = asType<string> d.["url"]
+    AspectRatio = asType<string> d.["aspectRatio"] }
+let internal parseTrackInfo (o : PyObject) =
+  let d = ofPyDict o
+  debugDict "getTrackInfo" 22 d
+  { Album = asType<string> d.["album"]
+    ExplicitType = asType<string> d.["explicitType"]
+    Kind = asType<string> d.["kind"]
+    Year = asType<int> d.["year"]
+    StoreId = asType<string> d.["storeId"]
+    Artist = asType<string> d.["artist"]
+    AlbumArtRef = 
+      asEnumerable d.["albumArtRef"]
+      |> Seq.map parseAlbumRef
+      |> Seq.toList
+    Title = asType<string> d.["title"]
+    NId = asType<string> d.["nid"]
+    EstimatedSize = asType<string> d.["estimatedSize"]
+    AlbumId = asType<string> d.["albumId"]
+    ArtistId = 
+      asEnumerable d.["artistId"]
+      |> Seq.map (asType<string>)
+      |> Seq.toList
+    AlbumArtist = asType<string> d.["albumArtist"]
+    DurationMillis = asType<string> d.["durationMillis"]
+    Composer = asType<string> d.["composer"]
+    Genre = asType<string> d.["genre"]
+    TrackNumber = asType<int> d.["trackNumber"]
+    DiscNumber = asType<int> d.["discNumber"]
+    TrackAvailableForPurchase = asType<bool> d.["trackAvailableForPurchase"]
+    TrackAvailableForSubscription = asType<bool> d.["trackAvailableForSubscription"]
+    TrackType = asType<string> d.["trackType"]
+    AlbumAvailableForPurchase =  asType<bool> d.["albumAvailableForPurchase"] }
+
 let getTrackInfo (trackId:string) { MobileClientHandle = mobileClient } =
   python {
     let trackInfo:PyObject = mobileClient?get_track_info(trackId)
-    let d = ofPyDict trackInfo
-    debugDict "getTrackInfo" 22 d
-    return 
-      { Album = asType<string> d.["album"]
-        ExplicitType = asType<string> d.["explicitType"]
-        Kind = asType<string> d.["kind"]
-        Year = asType<int> d.["year"]
-        StoreId = asType<string> d.["storeId"]
-        Artist = asType<string> d.["artist"]
-        AlbumArtRef = []
-        Title = asType<string> d.["title"]
-        NId = asType<string> d.["nid"]
-        EstimatedSize = asType<string> d.["estimatedSize"]
-        AlbumId = asType<string> d.["albumId"]
-        ArtistId = []
-        AlbumArtist = asType<string> d.["albumArtist"]
-        DurationMillis = asType<string> d.["durationMillis"]
-        Composer = asType<string> d.["composer"]
-        Genre = asType<string> d.["genre"]
-        TrackNumber = asType<int> d.["trackNumber"]
-        DiscNumber = asType<int> d.["discNumber"]
-        TrackAvailableForPurchase = asType<bool> d.["trackAvailableForPurchase"]
-        TrackAvailableForSubscription = asType<bool> d.["trackAvailableForSubscription"]
-        TrackType = asType<string> d.["trackType"]
-        AlbumAvailableForPurchase =  asType<bool> d.["albumAvailableForPurchase"] }
+    return parseTrackInfo trackInfo
   }
 
