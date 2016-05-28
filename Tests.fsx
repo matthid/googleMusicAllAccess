@@ -9,5 +9,5 @@ open GMusicAPI
 
 GMusicAPI.initialize (System.IO.Path.Combine(__SOURCE_DIRECTORY__, "temp", "python"))
 
-let mb = GMusicAPI.createMobileClient() |> PythonInterop.runInPython
+let mb = GMusicAPI.createMobileClient true false true |> PythonInterop.runInPython
 printfn "Success!"

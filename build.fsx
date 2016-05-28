@@ -14,7 +14,7 @@ let sysConfig =
   { Arch = Amd64; PythonVersion = new System.Version(3,5,1,3) }
 let pythonnetVersion = "2.1.0"
 
-let nugetVersion = "10.0.0-alpha2"
+let nugetVersion = "10.0.0-alpha3"
 
 open System
 open System.IO
