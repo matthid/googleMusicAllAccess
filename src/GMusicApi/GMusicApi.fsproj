@@ -52,6 +52,13 @@
     <None Include="Script.fsx" />
     <None Include="paket.references" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\GMusicApi.Core\GMusicApi.Core.fsproj">
+      <Name>GMusicApi.Core</Name>
+      <Project>{72a1ee19-d674-478c-b47a-1298e9ad8e64}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+  </ItemGroup>
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
   </PropertyGroup>

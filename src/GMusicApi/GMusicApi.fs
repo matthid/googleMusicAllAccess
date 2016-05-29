@@ -1,30 +1,34 @@
 ﻿module GMusicAPI.GMusicAPI
+
+open GMusicApi.Core
 open GMusicAPI.PythonInterop
 open Python.Runtime
 open FSharp.Interop.Dynamic
 
 /// Call this when you application starts
+let mutable isInitialized = false
 let initialize pythonDir =
-  let prev = System.Environment.CurrentDirectory
-  try
-    System.Environment.CurrentDirectory <- pythonDir
-    let oldPyPaths =
-      let envVar = System.Environment.GetEnvironmentVariable("PYTHONPATH")
-      if isNull envVar then []
-      else
-        envVar.Split([|System.IO.Path.PathSeparator|], System.StringSplitOptions.RemoveEmptyEntries)
-        |> Seq.toList
-    let join (paths: _ seq) = System.String.Join(string System.IO.Path.PathSeparator, paths)
-    let newPaths =
-      [ "."; "lib"; System.IO.Path.Combine("lib", "site-packages"); "DLLs" ]
-      |> List.map (fun e -> System.IO.Path.Combine(pythonDir, e))
-    let pythonZips = System.IO.Directory.EnumerateFiles(pythonDir, "python*.zip") |> Seq.toList
-    let combinedPaths = pythonZips @ newPaths @ oldPyPaths
-    System.Environment.SetEnvironmentVariable ("PYTHONPATH", join combinedPaths)
-    Python.Runtime.PythonEngine.Initialize()
-  finally
-    System.Environment.CurrentDirectory <- prev
-
+  if not isInitialized then
+    let prev = System.Environment.CurrentDirectory
+    try
+      System.Environment.CurrentDirectory <- pythonDir
+      let oldPyPaths =
+        let envVar = System.Environment.GetEnvironmentVariable("PYTHONPATH")
+        if isNull envVar then []
+        else
+          envVar.Split([|System.IO.Path.PathSeparator|], System.StringSplitOptions.RemoveEmptyEntries)
+          |> Seq.toList
+      let join (paths: _ seq) = System.String.Join(string System.IO.Path.PathSeparator, paths)
+      let newPaths =
+        [ "."; "lib"; System.IO.Path.Combine("lib", "site-packages"); "DLLs" ]
+        |> List.map (fun e -> System.IO.Path.Combine(pythonDir, e))
+      let pythonZips = System.IO.Directory.EnumerateFiles(pythonDir, "python*.zip") |> Seq.toList
+      let combinedPaths = pythonZips @ newPaths @ oldPyPaths
+      System.Environment.SetEnvironmentVariable ("PYTHONPATH", join combinedPaths)
+      Python.Runtime.PythonEngine.Initialize()
+    finally
+      System.Environment.CurrentDirectory <- prev
+    isInitialized <- true
 let debugDict name expectedKeys (d:System.Collections.Generic.IReadOnlyDictionary<string, PyObject>) =
   for k in d.Keys do
     if expectedKeys |> Seq.exists (fun exp -> exp = k) |> not then
@@ -36,7 +40,6 @@ let debugDict name expectedKeys (d:System.Collections.Generic.IReadOnlyDictionar
       printfn "Dictionary in '%s' contains unexpected key: '%s' (%s)" name k tryVal
   ()
 
-type Timestamp = { Raw : string }
 let toTimestamp s = { Raw = s }
 let ofTimestamp { Raw = s } = s
 
@@ -90,14 +93,6 @@ let createMobileClient (debugLogging : bool) (validate:bool) (verifySsl : bool) 
     return { MobileClientHandle = gmusic?Mobileclient(debugLogging, validate, verifySsl) }
   }
 
-/// Authenticates the Mobileclient. Returns `true` on success, `false` on failure.
-///
-/// - `locale`: ICU locale used to localize certain responses. This must be a locale supported by Android. Defaults to 'en_US'.
-/// - `username`: eg 'test@gmail.com' or just 'test'.
-/// - `password`: password or app-specific password for 2-factor users. This is not stored locally, and is sent securely over SSL.
-/// - `deviceId`: 16 hex digits, eg '1234567890abcdef'.
-///   Pass Mobileclient.FROM_MAC_ADDRESS instead to attempt to use this machine’s MAC address as an android id. Use this at your own risk: the id will be a non-standard 12 characters, but appears to work fine in testing. If a valid MAC address cannot be determined on this machine (which is often the case when running on a VPS), raise OSError.
-/// - `mobileClient`: a Mobileclient instance as created by `createMobileClient`
 let login { MobileClientHandle = mobileClient } (locale:System.Globalization.CultureInfo option) (username:string) (password:string) (deviceId:string) =
   let locale = defaultArg locale (System.Globalization.CultureInfo.GetCultureInfo("en-US"))
   python {
@@ -105,15 +100,12 @@ let login { MobileClientHandle = mobileClient } (locale:System.Globalization.Cul
     return asType<bool> res
   }
 
-/// Forgets local authentication and cached properties in this Api instance. Returns `true` on success.
-/// - `mobileClient`: a Mobileclient instance as created by `createMobileClient`
 let logout { MobileClientHandle = mobileClient } =
   python {
     let (res : PyObject) = mobileClient?logout()
     return asType<bool> res
   }
 
-/// Returns `true` if the Api can make an authenticated request.
 let isAuthenticated { MobileClientHandle = mobileClient } =
   python {
     let (res : PyObject) = mobileClient?is_authenticated()
@@ -130,33 +122,21 @@ let locale { MobileClientHandle = mobileClient } =
     return System.Globalization.CultureInfo.GetCultureInfo(locale)
   }
 
-/// Sets the current locale.
 let setLocale (newLocale:System.Globalization.CultureInfo) { MobileClientHandle = mobileClient } =
   python {
     mobileClient?locale <- newLocale.Name
   }
 
-/// Returns the subscription status of the Google Music account.
-/// Result is cached with a TTL of 10 minutes. To get live status before the TTL is up, use `deleteSubscribed` before calling this member.
 let isSubscribed { MobileClientHandle = mobileClient } =
   python {
     let res : PyObject = mobileClient?is_subscribed
     return asType<bool> res
   }
-/// Deletes the currently cached isSubscribed status.
 let deleteSubscribed { MobileClientHandle = mobileClient } =
   python {
     mobileClient.DelAttr("is_subscribed")
   }
 
-/// A registered device.
-type RegisteredDevice =
-  { Kind : string
-    FriendlyName : string option
-    Id : string
-    LastAccessedTimeMs : string
-    Type : string
-    SmartPhone : bool }
 
 let internal parseRegisteredDevice (o:PyObject) =
   let d = ofPyDict o
@@ -174,9 +154,6 @@ let internal parseRegisteredDevice (o:PyObject) =
       | true, v -> asType<bool> v
       | _ -> false }
 
-/// Returns a list of registered devices associated with the account.
-/// Performing the Musicmanager OAuth flow will register a device of type 'DESKTOP_APP'.
-/// Installing the Android or iOS Google Music app and logging into it will register a device of type 'ANDROID' or 'IOS' respectively, which is required for streaming with the Mobileclient.
 let getRegisteredDevices { MobileClientHandle = mobileClient } =
   python {
     let (rawDevicesList:PyObject) = mobileClient?get_registered_devices()
@@ -186,11 +163,6 @@ let getRegisteredDevices { MobileClientHandle = mobileClient } =
       |> Seq.toList
   }
 
-/// Deauthorize a registered device.
-/// Returns True on success, False on failure.
-/// - deviceId: A mobile device id as a string. Android ids are 16 characters with ‘0x’ prepended, iOS ids are uuids with ‘ios:’ prepended, while desktop ids are in the form of a MAC address.
-///   Providing an invalid or unregistered device id will result in a 400 HTTP error.
-/// Google limits the number of device deauthorizations to 4 per year. Attempts to deauthorize a device when that limit is reached results in a 403 HTTP error with: X-Rejected-Reason: TOO_MANY_DEAUTHORIZATIONS.
 let deauthorizeDevice { MobileClientHandle = mobileClient } (deviceId:string) =
   python {
     let res : PyObject = mobileClient?deauthorize_device(deviceId)
@@ -198,21 +170,13 @@ let deauthorizeDevice { MobileClientHandle = mobileClient } (deviceId:string) =
   }
 
 
-type VidThumb =
-  { Width : int
-    Height : int
-    Url : string }
 let internal parseVidThumb (o : PyObject) =
   let d = ofPyDict o
   debugDict "parseVidRef" ["width"; "height"; "url" ] d
   { Width = asType<int> d.["width"]
     Height = asType<int> d.["height"]
     Url = asType<string> d.["url"] }
-type VidRef =
-  { Kind : string
-    Thumbnails : VidThumb list
-    /// Youtube Id https://www.youtube.com/watch?v=%s for Url
-    Id : string }
+
 let internal parseVidRef (o : PyObject) =
   let d = ofPyDict o
   debugDict "parseVidRef" ["kind"; "thumbnails"; "id" ] d
@@ -222,11 +186,7 @@ let internal parseVidRef (o : PyObject) =
       |> Seq.map parseVidThumb
       |> Seq.toList
     Id = asType<string> d.["id"] }
-type ArtRef =
-  { Kind : string
-    Autogen : bool
-    Url : string
-    AspectRatio : string }
+
 let internal parseAlbumRef (o:PyObject) =
   let d = ofPyDict o
   debugDict "parseAlbumRef" [ "kind"; "autogen"; "url"; "aspectRatio" ] d
@@ -235,43 +195,11 @@ let internal parseAlbumRef (o:PyObject) =
     Url = asType<string> d.["url"]
     AspectRatio = asType<string> d.["aspectRatio"] }
 
-type Rating =
-  | NoRating
-  | ThumbDown
-  | ThumbUp
-  | Other of int
 let tryGet key (d:System.Collections.Generic.IReadOnlyDictionary<string,PyObject>) =  
   match d.TryGetValue key with
   | true, vla -> Some vla
   | _ -> None
-type TrackInfo =
-  { Album : string
-    ExplicitType : string
-    Kind : string
-    PrimaryVideo : VidRef option
-    StoreId : string
-    Artist : string
-    AlbumArtRef : ArtRef list
-    ArtistArtRef : ArtRef list option
-    Title : string
-    NId : string
-    EstimatedSize : string
-    Rating : Rating option
-    Year : int option
-    AlbumId : string
-    ArtistId : string list
-    AlbumArtist : string
-    DurationMillis : string
-    Composer : string
-    Genre : string
-    TrackNumber : int
-    DiscNumber : int
-    PlayCount : int option
-    TrackAvailableForPurchase : bool
-    TrackAvailableForSubscription : bool
-    TrackType : string
-    AlbumAvailableForPurchase : bool
-    LastRatingChangeTimestamp : Timestamp option }
+
 let internal trackDebugList = 
   [ "album"; "explicitType"; "kind"; "year"; "storeId"; "artist"; "albumArtRef"; "title";
     "nid"; "estimatedSize"; "albumId"; "artistId"; "albumArtist"; "durationMillis"; 
@@ -330,22 +258,6 @@ let internal parseTrackInfo (d : System.Collections.Generic.IReadOnlyDictionary<
     TrackType = asType<string> d.["trackType"]
     AlbumAvailableForPurchase =  asType<bool> d.["albumAvailableForPurchase"] }
 
-/// Songs are uniquely referred to within a library with a track id in uuid format.
-/// Store tracks also have track ids, but they are in a different format than library track ids. song_id.startswith('T') is always True for store track ids and False for library track ids.
-/// Adding a store track to a library will yield a normal song id.
-/// Store track ids can be used in most places that normal song ids can (e.g. playlist addition or streaming). Note that sometimes they are stored under the 'nid' key, not the 'id' key.
-type SongInfo =
-  { Comment : string
-    Track : TrackInfo
-    CreationTimestamp : Timestamp
-    Id : string
-    TotalDiscCount : int
-    RecentTimestamp : Timestamp
-    Deleted : bool 
-    TotalTrackCount : int 
-    BeatsPerMinute : int
-    LastModifiedTimestamp : Timestamp 
-    ClientId : string }
 let songAttributes =
   [ "comment"; "rating"; "creationTimestamp"; "id"; "totalDiscCount"; "recentTimestamp";
     "deleted"; "totalTrackCount"; "beatsPerMinute"; "lastModifiedTimestamp"; 
@@ -368,8 +280,6 @@ let internal parseSongInfoPy (o :PyObject) =
   debugDict "parseSongInfoPy" (songAttributes@trackDebugList) d
   parseSongInfo d
 
-/// Returns a list of dictionaries that each represent a song.
-/// - `include_deleted`: if True, include tracks that have been deleted in the past.
 let getAllSongs { MobileClientHandle = mobileClient } (includeDeleted:bool) =
   python {
     let trackInfo:PyObject = mobileClient?get_all_songs(false, includeDeleted)
@@ -379,8 +289,6 @@ let getAllSongs { MobileClientHandle = mobileClient } (includeDeleted:bool) =
       |> Seq.toList
   }
   
-/// Returns a list of dictionaries that each represent a song.
-/// - `include_deleted`: if True, include tracks that have been deleted in the past.
 let getAllSongsLazy { MobileClientHandle = mobileClient } (includeDeleted:bool) =
   pythonSeq {
     let trackInfo:PyObject = mobileClient?get_all_songs(true, includeDeleted)
@@ -388,29 +296,7 @@ let getAllSongsLazy { MobileClientHandle = mobileClient } (includeDeleted:bool) 
       yield parseSongInfoPy item
   }
 
-type StreamQuality =
-  | HighQuality
-  | MediumQuality
-  | LowQuality
 
-/// Returns a url that will point to an mp3 file.
-/// - `song_id`: a single song id
-/// - `device_id`: (optional) defaults to android_id from login.
-///   
-///   Otherwise, provide a mobile device id as a string. Android device ids are 16 characters, while iOS ids are uuids with ‘ios:’ prepended.
-///   
-///   If you have already used Google Music on a mobile device, Mobileclient.get_registered_devices will provide at least one working id. Omit '0x' from the start of the string if present.
-///   
-///   Registered computer ids (a MAC address) will not be accepted and will 403.
-///   
-///   Providing an unregistered mobile device id will register it to your account, subject to Google’s device limits. Registering a device id that you do not own is likely a violation of the TOS.
-/// - `quality`: (optional) stream bits per second quality One of three possible values, hi: 320kbps, med: 160kbps, low: 128kbps. The default is hi
-///
-/// When handling the resulting url, keep in mind that:
-///  - you will likely need to handle redirects
-///  - the url expires after a minute
-///  - only one IP can be streaming music at once. This can result in an http 403 with X-Rejected-Reason: ANOTHER_STREAM_BEING_PLAYED.
-/// The file will not contain metadata. Use Webclient.get_song_download_info or Musicmanager.download_song to download files with metadata.
 let getStreamUrl { MobileClientHandle = mobileClient } (deviceId: string option) (quality: StreamQuality option) (trackId:string) =
   let quality = defaultArg quality HighQuality
   let deviceId = defaultArg deviceId null
@@ -424,11 +310,9 @@ let getStreamUrl { MobileClientHandle = mobileClient } (deviceId: string option)
     return asType<string> streamUrl
   }
 
-/// Changes the metadata of tracks. Returns a list of the song ids changed.
-/// You can also use this to rate store tracks that aren’t in your library
 let rate { MobileClientHandle = mobileClient } (trackInfo : TrackInfo) (rating:Rating) =
   python {
-    let song:PyObject = mobileClient?get_track_info(trackInfo.NId)
+    let song:PyObject = mobileClient?get_track_info(trackInfo.StoreId)
     let ratingStr =
       match rating with
       | NoRating -> "0"
@@ -443,8 +327,6 @@ let rate { MobileClientHandle = mobileClient } (trackInfo : TrackInfo) (rating:R
       |> Seq.toList
   }
 
-/// Deletes songs from the library. Returns a list of deleted song ids.
-/// - song_ids – a list of song ids, or a single song id.
 let deleteSongs { MobileClientHandle = mobileClient } (ids: string list) =
   python {
     let l = new PyList()
@@ -461,7 +343,6 @@ let parseTrackInfoPy (o:PyObject) =
   debugDict "parseTrackInfoPy" trackDebugList d
   parseTrackInfo d
   
-/// Promoted tracks are determined in an unknown fashion, but positively-rated library tracks are common.
 let getPromotedSongs { MobileClientHandle = mobileClient } =
   python {
     let ret = mobileClient?get_promoted_songs()
@@ -471,19 +352,12 @@ let getPromotedSongs { MobileClientHandle = mobileClient } =
       |> Seq.toList
   }
   
-/// Increments a song’s playcount and returns its song id.
-/// - `song_id`: a song id. Providing the id of a store track that has been added to the library will not increment the corresponding library song’s playcount. To do this, use the ‘id’ field (which looks like a uuid and doesn’t begin with ‘T’), not the ‘nid’ field.
-/// - `plays`: (optional) positive number of plays to increment by. The default is 1.
-/// - `playtime`: (optional) a datetime.datetime of the time the song was played. It will default to the time of the call.
 let incrementSongPlaycount { MobileClientHandle = mobileClient } (songId:string) (plays:uint32) (dateTime:System.DateTime option) =
   python {
     let ret : PyObject = mobileClient?increment_song_playcount(songId, plays)
     return asType<string> ret
   }
 
-/// Adds a store track to the library
-/// Returns the library track id of added store track.
-/// - `store_song_id`: store song id
 let addStoreTrack { MobileClientHandle = mobileClient } (songId:string) =
   python {
     let ret : PyObject = mobileClient?add_store_track(songId)
@@ -491,23 +365,6 @@ let addStoreTrack { MobileClientHandle = mobileClient } (songId:string) =
   }
 
 
-type PlaylistType =
-  | SharedPlaylist
-  | MagicPlaylist
-  | UserPlaylist
-  | UnknownPlaylistType
-type PlaylistEntry =
-  { Kind : string
-    Deleted : bool
-    TrackId : string
-    LastModifiedTimestamp : Timestamp
-    PlaylistId : string option
-    AbsolutePosition : string
-    Source : string
-    ClientId : string option
-    Track : TrackInfo option
-    CreationTimestamp : Timestamp
-    Id : string }
 let internal parsePlaylistEntry (o:PyObject) =
   let d = ofPyDict o
   debugDict "parsePlaylistEntry"
@@ -534,22 +391,6 @@ let internal parsePlaylistEntry (o:PyObject) =
     Kind = asType<string> d.["kind"]
     CreationTimestamp = asType<string> d.["creationTimestamp"] |> toTimestamp
   }
-/// Like songs, playlists have unique ids within a library. However, their names do not need to be unique.
-/// The tracks making up a playlist are referred to as ‘playlist entries’, and have unique entry ids within the entire library (not just their containing playlist).
-type Playlist =
-  { AccessControlled : bool
-    CreationTimestamp : Timestamp
-    Type : PlaylistType
-    Deleted : bool
-    Id : string
-    Kind : string
-    LastModifiedTimestamp : Timestamp
-    Name : string
-    OwnerName : string
-    OwnerProfilePhotoUrl : string
-    RecentTimestamp : Timestamp
-    ShareToken : string
-    Tracks : PlaylistEntry list option }
 
 let internal parsePlaylist (o:PyObject) =
   let d = ofPyDict o
@@ -604,8 +445,6 @@ let getAllPlaylistsLazy { MobileClientHandle = mobileClient } (includeDeleted:bo
       yield parsePlaylist item
   }
 
-/// Retrieves the contents of all user-created playlists – the Mobileclient does not support retrieving only the contents of one playlist.
-/// This will not return results for public playlists that the user is subscribed to; use getSharedPlaylistContents() instead.
 let getAllUserPlayListContents { MobileClientHandle = mobileClient } =
   python {
     let trackInfo:PyObject = mobileClient?get_all_user_playlist_contents()
@@ -615,9 +454,6 @@ let getAllUserPlayListContents { MobileClientHandle = mobileClient } =
       |> Seq.toList
   }
 
-/// Retrieves the contents of a public playlist.
-/// - share_token: from playlist['shareToken'], or a playlist share url (https://play.google.com/music/playlist/<token>).
-///   Note that tokens from urls will need to be url-decoded, eg AM...%3D%3D becomes AM...==.
 let getSharedPlaylistContents { MobileClientHandle = mobileClient } (shareToken:string) =
   python {
     let trackInfo:PyObject = mobileClient?get_shared_playlist_contents(shareToken)
@@ -627,21 +463,21 @@ let getSharedPlaylistContents { MobileClientHandle = mobileClient } (shareToken:
       |> Seq.toList
   }
 
-/// Creates a new empty playlist and returns its id.
-let createPlaylist { MobileClientHandle = mobileClient } (name:string) (description:string) (isPublic:bool) =
+let createPlaylist { MobileClientHandle = mobileClient } (name:string) (description:string option) (isPublic:bool option) =
+  let isPublic = defaultArg isPublic false
+  let description = defaultArg description null
   python {
     let trackInfo:PyObject = mobileClient?create_playlist(name, description, isPublic)
     return asType<string> trackInfo
   }
 
-/// Deletes a playlist and returns its id.
 let deletePlaylist { MobileClientHandle = mobileClient } (playlistId:string) =
   python {
     let trackInfo:PyObject = mobileClient?delete_playlist(playlistId)
     return asType<string> trackInfo
   }
 
-/// Changes the name of a playlist and returns its id.
+
 let editPlaylist { MobileClientHandle = mobileClient } (playlistId:string) (name:string option) (description:string option) (isPublic:bool option) =
   python {
     let name = defaultArg name null
@@ -655,8 +491,6 @@ let editPlaylist { MobileClientHandle = mobileClient } (playlistId:string) (name
     return asType<string> trackInfo
   }
 
-/// Appends songs to the end of a playlist. Returns a list of playlist entry ids that were added.
-/// Playlists have a maximum size of 1000 songs. Calls may fail before that point (presumably) due to an error on Google’s end (see #239).
 let addSongsToPlaylist { MobileClientHandle = mobileClient } (playlistId:string) (songs : string list) =
   python {
     let l = new PyList()
@@ -669,7 +503,6 @@ let addSongsToPlaylist { MobileClientHandle = mobileClient } (playlistId:string)
       |> Seq.toList
   }
 
-/// Removes specific entries from a playlist. Returns a list of entry ids that were removed.
 let removeEntriesFromPlaylist { MobileClientHandle = mobileClient } (entries : string list) =
   python {
     let l = new PyList()
@@ -684,9 +517,59 @@ let removeEntriesFromPlaylist { MobileClientHandle = mobileClient } (entries : s
 
 //let reorderPlaylistEntry  { MobileClientHandle = mobileClient }
 
-/// Retrieves information about a store track.
 let getTrackInfo { MobileClientHandle = mobileClient } (trackId:string)  =
   python {
     let trackInfo:PyObject = mobileClient?get_track_info(trackId)
     return parseTrackInfoPy trackInfo
   }
+
+let toSongInterface mb =
+  { new ISongManagement with
+      member x.GetAllSongs i = getAllSongs mb i |> runInPython
+      member x.GetAllSongsLazy i =
+         Unchecked.defaultof<_>
+         // getAllSongsLazy mb i
+      member x.GetStreamUrl (t,d,q) = getStreamUrl mb d q t |> runInPython
+      member x.Rate(t, r) = rate mb t r |> runInPython
+      member x.DeleteSongs ids = deleteSongs mb ids |> runInPython
+      member x.GetPromotedSongs () = getPromotedSongs mb |> runInPython
+      member x.IncrementSongPlaycount (s, p, d) = incrementSongPlaycount mb s p d |> runInPython
+      member x.AddStoreTrack s = addStoreTrack mb s |> runInPython
+      member x.GetTrackInfo t = getTrackInfo mb t |> runInPython
+  }
+let toPlaylistInterface mb =
+  { new IPlaylistManagement with
+      member x.GetAllPlaylists i = getAllPlaylists mb i |> runInPython
+      member x.GetAllPlaylistsLazy i =
+        Unchecked.defaultof<_>
+      member x.AllUserPlaylistContents = getAllUserPlayListContents mb |> runInPython
+      member x.GetSharedPlaylistContents t = getSharedPlaylistContents mb t |> runInPython
+      member x.CreatePlaylist (n, d, p) = createPlaylist mb n d p |> runInPython
+      member x.DeletePlaylist id = deletePlaylist mb id |> runInPython
+      member x.EditPlaylist(i, n, d, p) = editPlaylist mb i n d p |> runInPython
+      member x.AddSongsToPlaylist (i, s) = addSongsToPlaylist mb i s |> runInPython
+      member x.RemoveEntriesFromPlaylist (e) = removeEntriesFromPlaylist mb e |> runInPython
+  }
+let toMobileInterface mb =
+  let songs = toSongInterface mb
+  let playlists = toPlaylistInterface mb
+  { new IMobileClient with
+      member x.Login (u,p,d,c) = 
+        let d = defaultArg d "dummy"
+        login mb c u p d |> runInPython |> ignore
+      member x.Logout () = logout mb |> runInPython|>ignore
+      member x.IsAuthenticated = isAuthenticated mb |> runInPython
+      member x.Locale 
+        with get () = locale mb |> runInPython
+        and set v = setLocale v mb |> runInPython
+      member x.IsSubscribed = isSubscribed mb |> runInPython
+      member x.DeleteSubscribedCache () = deleteSubscribed mb |> runInPython
+      member x.RegisteredDevices = getRegisteredDevices mb |> runInPython
+      member x.DeauthorizeDevice d = deauthorizeDevice mb d |> runInPython |> ignore
+      member x.Songs = songs
+      member x.Playlists = playlists }
+
+let createMobileClientAndInitialize pythonDir  (debugLogging : bool) (validate:bool) (verifySsl : bool) =
+  initialize pythonDir
+  let mb = createMobileClient debugLogging validate verifySsl |> runInPython
+  toMobileInterface mb
