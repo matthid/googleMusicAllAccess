@@ -1,5 +1,7 @@
 F# wrapper on top of https://github.com/simon-weber/gmusicapi via https://github.com/pythonnet/pythonnet
 
+Alternative: https://github.com/Clancey/gMusic
+
 Currently this works only on 64 bit Windows. It should be straight forward to add other platforms.
 Feel free to send Pull-Requests.
 
