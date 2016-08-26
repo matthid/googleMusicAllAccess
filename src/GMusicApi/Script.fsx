@@ -8,6 +8,8 @@
 
 #load "StringCypher.fs"
 #load "PythonInterop.fs"
+#load "../GMusicApi.Core/DataTypes.fs"
+#load "../GMusicApi.Core/Interfaces.fs"
 #load "GMusicApi.fs"
 
 open GMusicAPI

@@ -57,7 +57,7 @@ type TrackInfo =
     AlbumArtist : string
     DurationMillis : string
     Composer : string
-    Genre : string
+    Genre : string option
     TrackNumber : int
     DiscNumber : int
     PlayCount : int option
@@ -115,6 +115,8 @@ type PlaylistEntry =
 type Playlist =
   { AccessControlled : bool
     CreationTimestamp : Timestamp
+    Description : string option
+    ClientId : string option
     Type : PlaylistType
     Deleted : bool
     Id : string

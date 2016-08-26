@@ -14,7 +14,6 @@ let sysConfig =
   { Arch = Amd64; PythonVersion = new System.Version(3,5,1,3) }
 let pythonnetVersion = "2.1.0"
 
-let nugetVersion = "10.0.0-alpha3"
 
 open System
 open System.IO
@@ -26,6 +25,9 @@ open SharpCompress.Archive
 open SharpCompress.Common
 
 Environment.CurrentDirectory <- __SOURCE_DIRECTORY__
+
+let releaseNotes = ReleaseNotesHelper.LoadReleaseNotes "RELEASE_NOTES.md"
+let nugetVersion = releaseNotes.NugetVersion
 
 let extract dir file =
   use stream = File.OpenRead(file)
@@ -91,8 +93,8 @@ Target "SetupPython" (fun _ ->
     if not (Directory.Exists ("temp"@@"pythonnet")) then
       Git.Repository.cloneSingleBranch
         ("temp")
-        ("https://github.com/matthid/pythonnet.git")
-        "myfixes"
+        ("https://github.com/pythonnet/pythonnet.git")
+        "master"
         "pythonnet"
     let python_ = pythonW ("temp"@@"pythonnet")
     python_ "-m pip install wheel"
@@ -129,7 +131,7 @@ Target "Build" (fun _ ->
 )
 
 Target "CopyToRelease" (fun _ ->
-    let files = [ "GMusicAPI.dll"; "GMusicAPI.XML" ]
+    let files = [ "GMusicApi.dll"; "GMusicApi.xml"; "GMusicApi.Core.dll"; "GMusicApi.Core.xml" ]
     ensureDirectory ("release"@@"lib")
     for f in files do
       CopyFile ("release"@@"lib") ("src"@@"GMusicAPI"@@"bin"@@buildNameString@@f)
@@ -191,6 +193,7 @@ let packSetup version p =
       Summary = "Wrapper around https://github.com/simon-weber/gmusicapi"
       Version = version
       Description = "Wrapper around https://github.com/simon-weber/gmusicapi"
+      ReleaseNotes = releaseNotes.Notes |> String.concat "\n"
       Tags = "python google music all access fsharp csharp dll"
       WorkingDir = "."
       OutputPath = "release"@@"nuget"

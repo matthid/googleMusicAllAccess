@@ -250,7 +250,7 @@ let internal parseTrackInfo (d : System.Collections.Generic.IReadOnlyDictionary<
     AlbumArtist = asType<string> d.["albumArtist"]
     DurationMillis = asType<string> d.["durationMillis"]
     Composer = asType<string> d.["composer"]
-    Genre = asType<string> d.["genre"]
+    Genre = tryGet "genre" d |> Option.map asType<string>
     TrackNumber = asType<int> d.["trackNumber"]
     DiscNumber = asType<int> d.["discNumber"]
     TrackAvailableForPurchase = asType<bool> d.["trackAvailableForPurchase"]
@@ -416,6 +416,8 @@ let internal parsePlaylist (o:PyObject) =
           printfn "Unknown playlist type '%s'" u
           UnknownPlaylistType
       | _ -> UnknownPlaylistType
+    Description = tryGet "description" d |> Option.map asType<string>
+    ClientId = tryGet "clientId" d |> Option.map asType<string>
     AccessControlled = asType<bool> d.["accessControlled"]
     CreationTimestamp = asType<string> d.["creationTimestamp"] |> toTimestamp
     Deleted = asType<bool> d.["deleted"]

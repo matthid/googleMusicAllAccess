@@ -6,9 +6,9 @@
     <version>@build.number@</version>
     <authors>@authors@</authors>
     <owners>@authors@</owners>
-    <licenseUrl>http://github.com/matthid/Yaaf.AdvancedBuilding/blob/develop/LICENSE.md</licenseUrl>
-    <projectUrl>http://matthid.github.com/Yaaf.AdvancedBuilding</projectUrl>
-    <iconUrl>https://raw.githubusercontent.com/matthid/Yaaf.AdvancedBuilding/master/doc/content/img/logo.png</iconUrl>
+    <licenseUrl>https://github.com/matthid/googleMusicAllAccess/blob/develop/LICENSE.md</licenseUrl>
+    <projectUrl>https://matthid.github.com/googleMusicAllAccess</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/matthid/googleMusicAllAccess/master/doc/content/img/logo.png</iconUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <summary>@summary@</summary>
     <description>@description@</description>
@@ -20,5 +20,7 @@
   <files>
     <file src="release/lib/GMusicApi.dll" target="lib\net45\GMusicApi.dll" />
     <file src="release/lib/GMusicApi.xml" target="lib\net45\GMusicApi.xml" />
+    <file src="release/lib/GMusicApi.Core.dll" target="lib\net45\GMusicApi.Core.dll" />
+    <file src="release/lib/GMusicApi.Core.xml" target="lib\net45\GMusicApi.Core.xml" />
   </files>
 </package>
